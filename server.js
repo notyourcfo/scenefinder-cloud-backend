@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const ytdl = require('@distube/ytdl-core');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
@@ -11,7 +10,6 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-ffmpeg.setFfmpegPath(ffmpegStatic);
 
 // Middleware
 app.use(cors());
@@ -93,7 +91,7 @@ app.post('/api/process-video', async (req, res) => {
       console.log('Processing YouTube URL:', url);
       await withRetry(async () => {
         const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
-        const fileStream = fs.createWriteStream(audioPath);
+        const fileStream = fs.createWriteStream(videoPath);
         stream.pipe(fileStream);
 
         await new Promise((resolve, reject) => {
@@ -101,6 +99,18 @@ app.post('/api/process-video', async (req, res) => {
           fileStream.on('error', reject);
           stream.on('error', (err) => reject(err));
         });
+      });
+
+      // Convert to MP3
+      console.log('Converting to MP3:', videoPath);
+      await new Promise((resolve, reject) => {
+        ffmpeg(videoPath)
+          .output(audioPath)
+          .audioCodec('libmp3lame')
+          .audioBitrate('192k')
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
       });
     } else if (url.includes('instagram.com')) {
       // Instagram (disabled)
