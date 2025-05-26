@@ -104,11 +104,19 @@ app.post('/api/process-video', async (req, res) => {
         let cookies = [];
         try {
           if (process.env.YOUTUBE_COOKIES) {
-            cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
+            cookies = JSON.parse(process.env.YOUTUBE_COOKIES).map(cookie => ({
+              name: cookie.key,
+              value: cookie.value,
+              domain: cookie.domain,
+              path: cookie.path,
+              expires: cookie.expires,
+              httpOnly: cookie.httpOnly,
+              secure: cookie.secure
+            }));
             if (!Array.isArray(cookies)) {
               throw new Error('Cookies must be an array');
             }
-            console.log('Using YouTube cookies:', cookies.map(c => c.key));
+            console.log('Using YouTube cookies:', cookies.map(c => c.name));
           } else {
             console.warn('No YOUTUBE_COOKIES provided');
           }
