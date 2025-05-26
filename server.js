@@ -26,15 +26,15 @@ try {
   process.exit(1);
 }
 
-// Rate limit backoff
+// Rate limit and bot detection backoff
 let lastRateLimit = 0;
-const RATE_LIMIT_BACKOFF_MS = 10 * 60 * 1000; // 10 minutes
+const RATE_LIMIT_BACKOFF_MS = 20 * 60 * 1000; // 20 minutes
 
-// Retry function
+// Retry function with bot detection handling
 async function withRetry(fn, retries = 5, initialDelay = 10000) {
   if (Date.now() - lastRateLimit < RATE_LIMIT_BACKOFF_MS) {
     const waitTime = Math.ceil((RATE_LIMIT_BACKOFF_MS - (Date.now() - lastRateLimit)) / 1000);
-    throw new Error(`Rate limit backoff active. Please wait ${waitTime} seconds.`);
+    throw new Error(`Rate limit or bot detection backoff active. Please wait ${waitTime} seconds.`);
   }
 
   let delay = initialDelay;
@@ -42,12 +42,13 @@ async function withRetry(fn, retries = 5, initialDelay = 10000) {
     try {
       return await fn();
     } catch (error) {
-      if (error.statusCode === 429 && i < retries - 1) {
-        console.log(`Error 429, retrying in ${delay}ms...`);
+      const isBotError = error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429;
+      if (isBotError && i < retries - 1) {
+        console.log(`Error ${error.statusCode || 'bot detection'}, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
       } else {
-        if (error.statusCode === 429) {
+        if (isBotError) {
           lastRateLimit = Date.now();
         }
         throw error;
@@ -90,7 +91,13 @@ app.post('/api/process-video', async (req, res) => {
       // YouTube
       console.log('Processing YouTube URL:', url);
       await withRetry(async () => {
-        const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
+        const agent = ytdl.createAgent({
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        });
+        const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', requestOptions: { agent } });
         const fileStream = fs.createWriteStream(videoPath);
         stream.pipe(fileStream);
 
@@ -145,8 +152,8 @@ app.post('/api/process-video', async (req, res) => {
     });
   } catch (error) {
     console.error('Error processing video:', error);
-    if (error.statusCode === 429 || error.message.includes('rate limit')) {
-      return res.status(429).json({ error: error.message || 'Rate limit exceeded' });
+    if (error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429) {
+      return res.status(429).json({ error: 'YouTube bot detection or rate limit exceeded. Please try again later.' });
     }
     return res.status(500).json({ error: error.message || 'Internal server error' });
   } finally {
