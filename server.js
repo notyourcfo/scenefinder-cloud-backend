@@ -6,6 +6,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
+const Instagram = require('insta-fetcher');
 
 require('dotenv').config();
 
@@ -134,10 +135,57 @@ app.post('/api/process-video', async (req, res) => {
           .run();
       });
     } else if (url.includes('instagram.com')) {
-      // Instagram (disabled)
-      return res.status(503).json({ error: 'Instagram processing unavailable due to API restrictions' });
+      // Instagram
+      console.log('Processing Instagram URL:', url);
+      if (!process.env.INSTAGRAM_USERNAME || !process.env.INSTAGRAM_PASSWORD) {
+        throw new Error('Instagram credentials missing in environment variables');
+      }
+
+      await withRetry(async () => {
+        const ig = new Instagram({
+          username: process.env.INSTAGRAM_USERNAME,
+          password: process.env.INSTAGRAM_PASSWORD
+        });
+
+        try {
+          await ig.login();
+          const post = await ig.fetchPost(url);
+          if (!post.video_url) {
+            throw new Error('No video found in Instagram post');
+          }
+
+          const videoResponse = await axios.get(post.video_url, {
+            responseType: 'stream',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+
+          const fileStream = fs.createWriteStream(videoPath);
+          videoResponse.data.pipe(fileStream);
+
+          await new Promise((resolve, reject) => {
+            fileStream.on('finish', resolve);
+            fileStream.on('error', reject);
+          });
+
+          // Convert to MP3
+          console.log('Converting to MP3:', videoPath);
+          await new Promise((resolve, reject) => {
+            ffmpeg(videoPath)
+              .output(audioPath)
+              .audioCodec('libmp3lame')
+              .audioBitrate('192k')
+              .on('end', resolve)
+              .on('error', reject)
+              .run();
+          });
+        } catch (error) {
+          throw new Error(`Instagram processing failed: ${error.message}`);
+        }
+      });
     } else {
-      return res.status(400).json({ error: 'Unsupported URL. Only YouTube is supported.' });
+      return res.status(400).json({ error: 'Unsupported URL. Only YouTube and Instagram are supported.' });
     }
 
     // Verify MP3
