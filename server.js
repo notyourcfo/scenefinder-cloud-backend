@@ -12,6 +12,15 @@ require('dotenv').config();
 
 const app = express();
 
+// Log environment variables for debugging
+console.log('Environment Variables:', {
+  RENDER_UPLOAD_URL: process.env.RENDER_UPLOAD_URL,
+  YTDL_NO_UPDATE: process.env.YTDL_NO_UPDATE,
+  YOUTUBE_COOKIES: process.env.YOUTUBE_COOKIES,
+  INSTAGRAM_USERNAME: process.env.INSTAGRAM_USERNAME,
+  INSTAGRAM_PASSWORD: !!process.env.INSTAGRAM_PASSWORD // Mask password
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -99,9 +108,13 @@ app.post('/api/process-video', async (req, res) => {
             if (!Array.isArray(cookies)) {
               throw new Error('Cookies must be an array');
             }
+            console.log('Using YouTube cookies:', cookies.map(c => c.key));
+          } else {
+            console.warn('No YOUTUBE_COOKIES provided');
           }
         } catch (error) {
-          console.warn('Invalid YOUTUBE_COOKIES, proceeding without cookies:', error.message);
+          console.error('Invalid YOUTUBE_COOKIES:', error.message);
+          throw error;
         }
 
         const agent = ytdl.createAgent({
