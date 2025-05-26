@@ -91,12 +91,26 @@ app.post('/api/process-video', async (req, res) => {
       // YouTube
       console.log('Processing YouTube URL:', url);
       await withRetry(async () => {
+        let cookies = [];
+        try {
+          if (process.env.YOUTUBE_COOKIES) {
+            cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
+            if (!Array.isArray(cookies)) {
+              throw new Error('Cookies must be an array');
+            }
+          }
+        } catch (error) {
+          console.warn('Invalid YOUTUBE_COOKIES, proceeding without cookies:', error.message);
+        }
+
         const agent = ytdl.createAgent({
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9'
-          }
+          },
+          cookies: cookies.length > 0 ? cookies : undefined
         });
+
         const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', requestOptions: { agent } });
         const fileStream = fs.createWriteStream(videoPath);
         stream.pipe(fileStream);
