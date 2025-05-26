@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import shutil
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired, ClientError
 
@@ -16,8 +17,10 @@ def download_video(url, output_path, username, password):
         if media.media_type == 2:  # Video
             # Ensure output directory exists
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            # Download video
-            cl.video_download(media.pk, folder=os.path.dirname(output_path), filename=os.path.basename(output_path))
+            # Download video to temporary path
+            temp_path = cl.video_download(media.pk, folder=os.path.dirname(output_path))
+            # Move to desired output path
+            shutil.move(temp_path, output_path)
             return {'success': True, 'filePath': output_path}
         else:
             return {'success': False, 'error': 'No video found in Instagram post'}
