@@ -44,7 +44,7 @@ const RATE_LIMIT_BACKOFF_MS = 20 * 60 * 1000; // 20 minutes
 async function withRetry(fn, retries = 5, initialDelay = 10000) {
   if (Date.now() - lastRateLimit < RATE_LIMIT_BACKOFF_MS) {
     const waitTime = Math.ceil((RATE_LIMIT_BACKOFF_MS - (Date.now() - lastRateLimit)) / 1000);
-    throw new Error(Rate limit or bot detection backoff active. Please wait  seconds.);
+    throw new Error(`Rate limit or bot detection backoff active. Please wait ${waitTime} seconds.`);
   }
 
   let delay = initialDelay;
@@ -52,9 +52,9 @@ async function withRetry(fn, retries = 5, initialDelay = 10000) {
     try {
       return await fn();
     } catch (error) {
-      const isBotError = error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429;
+      const isBotError = error.message.includes('Sign in to confirm youâ€™re not a bot') || error.statusCode === 429;
       if (isBotError && i < retries - 1) {
-        console.log(Error , retrying in ms...);
+        console.log(`Error ${error.statusCode || 'bot detection'}, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
       } else {
@@ -81,15 +81,15 @@ app.post('/api/process-video', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or missing URL' });
     }
 
-    videoPath = path.join(uploadDir, 	emp-video-.mp4);
-    audioPath = path.join(uploadDir, 	emp-audio-.mp3);
+    videoPath = path.join(uploadDir, `temp-video-${Date.now()}.mp4`);
+    audioPath = path.join(uploadDir, `temp-audio-${Date.now()}.mp3`);
 
     // Check disk space
     try {
       const stats = fs.statfsSync(uploadDir);
       const freeMB = (stats.bavail * stats.bsize) / (1024 * 1024);
       if (freeMB < 100) {
-        console.warn(Low disk space:  MB available);
+        console.warn(`Low disk space: ${freeMB.toFixed(2)} MB available`);
         return res.status(500).json({ error: 'Insufficient disk space' });
       }
     } catch (error) {
@@ -132,17 +132,15 @@ app.post('/api/process-video', async (req, res) => {
         await new Promise((resolve, reject) => {
           fileStream.on('finish', resolve);
           fileStream.on('error', reject);
-          stream.on('error', (err) => reject(err));
         });
       });
 
       // Convert to MP3
-      console.log('Converting to MP3:', videoPath);
+      console.log('Converting to MP3');
       await new Promise((resolve, reject) => {
         ffmpeg(videoPath)
           .output(audioPath)
           .audioCodec('libmp3lame')
-          .audioBitrate('192k')
           .on('end', resolve)
           .on('error', reject)
           .run();
@@ -154,51 +152,42 @@ app.post('/api/process-video', async (req, res) => {
         throw new Error('Instagram credentials missing in environment variables');
       }
 
-      await withRetry(async () => {
+      try {
         const ig = new InstagramScraper({
           username: process.env.INSTAGRAM_USERNAME,
           password: process.env.INSTAGRAM_PASSWORD
         });
-
-        try {
-          await ig.auth();
-          const media = await ig.getMediaByUrl(url);
-          if (!media.videoUrl) {
-            throw new Error('No video found in Instagram post');
-          }
-
-          const videoResponse = await axios.get(media.videoUrl, {
-            responseType: 'stream',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-          });
-
-          const fileStream = fs.createWriteStream(videoPath);
-          videoResponse.data.pipe(fileStream);
-
-          await new Promise((resolve, reject) => {
-            fileStream.on('finish', resolve);
-            fileStream.on('error', reject);
-          });
-
-          // Convert to MP3
-          console.log('Converting to MP3:', videoPath);
-          await new Promise((resolve, reject) => {
-            ffmpeg(videoPath)
-              .output(audioPath)
-              .audioCodec('libmp3lame')
-              .audioBitrate('192k')
-              .on('end', resolve)
-              .on('error', reject)
-              .run();
-          });
-        } catch (error) {
-          throw new Error(Instagram processing failed: );
+        await ig.auth();
+        const media = await ig.getMediaByUrl(url);
+        if (!media || !media.videoUrl) {
+          throw new Error('No video found in Instagram post');
         }
-      });
+        const videoResponse = await axios.get(media.videoUrl, {
+          responseType: 'stream',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        const fileStream = fs.createWriteStream(videoPath);
+        videoResponse.data.pipe(fileStream);
+        await new Promise((resolve, reject) => {
+          fileStream.on('finish', resolve);
+          fileStream.on('error', reject);
+        });
+        console.log('Converting Instagram to MP3');
+        await new Promise((resolve, reject) => {
+          ffmpeg(videoPath)
+            .output(audioPath)
+            .audioCodec('libmp3lame')
+            .on('end', resolve)
+            .on('error', reject)
+            .run();
+        });
+      } catch (error) {
+        throw new Error(`Instagram processing failed: ${error.message}`);
+      }
     } else {
-      return res.status(400).json({ error: 'Unsupported URL. Only YouTube and Instagram are supported.' });
+      return res.status(400).json({ error: 'Invalid or unsupported URL.' });
     }
 
     // Verify MP3
@@ -209,7 +198,7 @@ app.post('/api/process-video', async (req, res) => {
     // Check MP3 size
     const fileSizeMB = fs.statSync(audioPath).size / (1024 * 1024);
     if (fileSizeMB > 5) {
-      throw new Error(MP3 exceeds 5MB limit: MB);
+      throw new Error(`MP3 exceeds 5MB limit: ${fileSizeMB.toFixed(2)}MB`);
     }
 
     // Forward to Render
@@ -227,7 +216,7 @@ app.post('/api/process-video', async (req, res) => {
     });
   } catch (error) {
     console.error('Error processing video:', error);
-    if (error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429) {
+    if (error.message.includes('Sign in to confirm youâ€™re not a bot') || error.statusCode === 429) {
       return res.status(429).json({ error: 'YouTube bot detection or rate limit exceeded. Please try again later.' });
     }
     return res.status(500).json({ error: error.message || 'Internal server error' });
@@ -249,7 +238,7 @@ app.post('/api/process-video', async (req, res) => {
 // Start server
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
-  console.log(Server running on port );
+  console.log(`Server running on port ${port}`);
 });
 
 module.exports = app;
