@@ -6,6 +6,9 @@ RUN /app/venv/bin/pip install instagrapi Pillow>=8.1.1
 COPY package*.json ./
 RUN npm install
 COPY . .
-ENV PATH="/app/venv/bin:"
+ENV PATH="/app/venv/bin:$PATH"
+ENV PORT=8080
+# Explicitly reset ENTRYPOINT to avoid inherited scripts
+ENTRYPOINT []
 EXPOSE 8080
 CMD ["node", "server.js"]
