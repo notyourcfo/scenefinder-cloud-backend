@@ -104,37 +104,25 @@ app.post('/api/process-video', async (req, res) => {
         let cookies = [];
         try {
           if (process.env.YOUTUBE_COOKIES) {
-            console.log('YOUTUBE_COOKIES type:', typeof process.env.YOUTUBE_COOKIES);
-            console.log('YOUTUBE_COOKIES raw:', process.env.YOUTUBE_COOKIES);
-            
-            // Handle string or JSON input
-            const rawCookies = typeof process.env.YOUTUBE_COOKIES === 'string'
-              ? JSON.parse(process.env.YOUTUBE_COOKIES)
-              : process.env.YOUTUBE_COOKIES;
-
-            cookies = Array.isArray(rawCookies)
-              ? rawCookies.map(cookie => ({
-                  name: cookie.key,
-                  value: cookie.value,
-                  domain: cookie.domain,
-                  path: cookie.path,
-                  expires: cookie.expires,
-                  httpOnly: cookie.httpOnly,
-                  secure: cookie.secure
-                }))
-              : [];
-
-            if (!Array.isArray(cookies) || cookies.length === 0) {
-              console.warn('YOUTUBE_COOKIES is empty or not an array');
-            } else {
-              console.log('Using YouTube cookies:', cookies.map(c => c.name));
+            cookies = JSON.parse(process.env.YOUTUBE_COOKIES).map(cookie => ({
+              name: cookie.key,
+              value: cookie.value,
+              domain: cookie.domain,
+              path: cookie.path,
+              expires: cookie.expires,
+              httpOnly: cookie.httpOnly,
+              secure: cookie.secure
+            }));
+            if (!Array.isArray(cookies)) {
+              throw new Error('Cookies must be an array');
             }
+            console.log('Using YouTube cookies:', cookies.map(c => c.name));
           } else {
             console.warn('No YOUTUBE_COOKIES provided');
           }
         } catch (error) {
           console.error('Invalid YOUTUBE_COOKIES:', error.message);
-          cookies = []; // Proceed without cookies
+          throw error;
         }
 
         const agent = ytdl.createAgent({
