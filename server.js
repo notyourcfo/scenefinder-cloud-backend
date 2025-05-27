@@ -44,7 +44,7 @@ const RATE_LIMIT_BACKOFF_MS = 20 * 60 * 1000; // 20 minutes
 async function withRetry(fn, retries = 5, initialDelay = 10000) {
   if (Date.now() - lastRateLimit < RATE_LIMIT_BACKOFF_MS) {
     const waitTime = Math.ceil((RATE_LIMIT_BACKOFF_MS - (Date.now() - lastRateLimit)) / 1000);
-    throw new Error(`Rate limit or bot detection backoff active. Please wait ${waitTime} seconds.`);
+    throw new Error(Rate limit or bot detection backoff active. Please wait  seconds.);
   }
 
   let delay = initialDelay;
@@ -52,9 +52,9 @@ async function withRetry(fn, retries = 5, initialDelay = 10000) {
     try {
       return await fn();
     } catch (error) {
-      const isBotError = error.message.includes('Sign in to confirm youâ€™re not a bot') || error.statusCode === 429;
+      const isBotError = error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429;
       if (isBotError && i < retries - 1) {
-        console.log(`Error ${error.statusCode || 'bot detection'}, retrying in ${delay}ms...`);
+        console.log(Error , retrying in ms...);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
       } else {
@@ -81,15 +81,15 @@ app.post('/api/process-video', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or missing URL' });
     }
 
-    videoPath = path.join(uploadDir, `temp-video-${Date.now()}.mp4`);
-    audioPath = path.join(uploadDir, `temp-audio-${Date.now()}.mp3`);
+    videoPath = path.join(uploadDir, 	emp-video-.mp4);
+    audioPath = path.join(uploadDir, 	emp-audio-.mp3);
 
     // Check disk space
     try {
       const stats = fs.statfsSync(uploadDir);
       const freeMB = (stats.bavail * stats.bsize) / (1024 * 1024);
       if (freeMB < 100) {
-        console.warn(`Low disk space: ${freeMB.toFixed(2)} MB available`);
+        console.warn(Low disk space:  MB available);
         return res.status(500).json({ error: 'Insufficient disk space' });
       }
     } catch (error) {
@@ -104,25 +104,37 @@ app.post('/api/process-video', async (req, res) => {
         let cookies = [];
         try {
           if (process.env.YOUTUBE_COOKIES) {
-            cookies = JSON.parse(process.env.YOUTUBE_COOKIES).map(cookie => ({
-              name: cookie.key,
-              value: cookie.value,
-              domain: cookie.domain,
-              path: cookie.path,
-              expires: cookie.expires,
-              httpOnly: cookie.httpOnly,
-              secure: cookie.secure
-            }));
-            if (!Array.isArray(cookies)) {
-              throw new Error('Cookies must be an array');
+            console.log('YOUTUBE_COOKIES type:', typeof process.env.YOUTUBE_COOKIES);
+            console.log('YOUTUBE_COOKIES raw:', process.env.YOUTUBE_COOKIES);
+            
+            // Handle string or JSON input
+            const rawCookies = typeof process.env.YOUTUBE_COOKIES === 'string'
+              ? JSON.parse(process.env.YOUTUBE_COOKIES)
+              : process.env.YOUTUBE_COOKIES;
+
+            cookies = Array.isArray(rawCookies)
+              ? rawCookies.map(cookie => ({
+                  name: cookie.key,
+                  value: cookie.value,
+                  domain: cookie.domain,
+                  path: cookie.path,
+                  expires: cookie.expires,
+                  httpOnly: cookie.httpOnly,
+                  secure: cookie.secure
+                }))
+              : [];
+
+            if (!Array.isArray(cookies) || cookies.length === 0) {
+              console.warn('YOUTUBE_COOKIES is empty or not an array');
+            } else {
+              console.log('Using YouTube cookies:', cookies.map(c => c.name));
             }
-            console.log('Using YouTube cookies:', cookies.map(c => c.name));
           } else {
             console.warn('No YOUTUBE_COOKIES provided');
           }
         } catch (error) {
           console.error('Invalid YOUTUBE_COOKIES:', error.message);
-          throw error;
+          cookies = []; // Proceed without cookies
         }
 
         const agent = ytdl.createAgent({
@@ -178,7 +190,7 @@ app.post('/api/process-video', async (req, res) => {
               .run();
           });
         } catch (error) {
-          throw new Error(`Instagram processing failed: ${error.message}`);
+          throw new Error(Instagram processing failed: );
         }
       });
     } else {
@@ -193,7 +205,7 @@ app.post('/api/process-video', async (req, res) => {
     // Check MP3 size
     const fileSizeMB = fs.statSync(audioPath).size / (1024 * 1024);
     if (fileSizeMB > 5) {
-      throw new Error(`MP3 exceeds 5MB limit: ${fileSizeMB.toFixed(2)}MB`);
+      throw new Error(MP3 exceeds 5MB limit: MB);
     }
 
     // Forward to Render
@@ -211,7 +223,7 @@ app.post('/api/process-video', async (req, res) => {
     });
   } catch (error) {
     console.error('Error processing video:', error);
-    if (error.message.includes('Sign in to confirm youâ€™re not a bot') || error.statusCode === 429) {
+    if (error.message.includes('Sign in to confirm you’re not a bot') || error.statusCode === 429) {
       return res.status(429).json({ error: 'YouTube bot detection or rate limit exceeded. Please try again later.' });
     }
     return res.status(500).json({ error: error.message || 'Internal server error' });
@@ -233,7 +245,7 @@ app.post('/api/process-video', async (req, res) => {
 // Start server
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(Server running on port );
 });
 
 module.exports = app;
